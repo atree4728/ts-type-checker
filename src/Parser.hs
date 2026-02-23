@@ -14,13 +14,6 @@ type ParserError = Void
 
 type Parser = Parsec ParserError Text
 
-{-
-<term>
-    = `true`
-    | `false`
-    | <term> `?` <term>
--}
-
 sc :: Parser ()
 sc = L.space space1 empty empty
 
@@ -35,15 +28,14 @@ parens = between (symbol "(") (symbol ")")
 
 pTerm :: Parser Term
 pTerm = do
-    t1 <- pAddExpr
-    ( do
-            _ <- symbol "?"
-            t2 <- pTerm
-            _ <- symbol ":"
-            t3 <- pTerm
-            return $ TmIf t1 t2 t3
-        )
-        <|> return t1
+  t1 <- pAddExpr
+  ( do
+      _ <- symbol "?"
+      t2 <- pTerm
+      _ <- symbol ":"
+      TmIf t1 t2 <$> pTerm
+    )
+    <|> return t1
 
 pAddExpr :: Parser Term
 pAddExpr = makeExprParser pAtom operatorTable
@@ -53,12 +45,12 @@ operatorTable = [[InfixL (TmAdd <$ symbol "+")]]
 
 pAtom :: Parser Term
 pAtom =
-    choice
-        [ parens pTerm
-        , TmTrue <$ symbol "true"
-        , TmFalse <$ symbol "false"
-        , TmNumber <$> lexeme L.decimal
-        ]
+  choice
+    [ parens pTerm,
+      TmTrue <$ symbol "true",
+      TmFalse <$ symbol "false",
+      TmNumber <$> lexeme L.decimal
+    ]
 
 parseTerm :: Text -> Either (ParseErrorBundle Text Void) Term
 parseTerm = parse (sc *> pTerm <* eof) ""
