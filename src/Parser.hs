@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser where
+module Parser (parseTerm, Parser, ParserError) where
 
-import AST (Term (..))
+import AST (Param (..), Term (..), Type (..))
 import Control.Monad.Combinators.Expr
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Void (Void)
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -28,7 +29,7 @@ parens = between (symbol "(") (symbol ")")
 
 pTerm :: Parser Term
 pTerm = do
-  t1 <- pAddExpr
+  t1 <- pBinOp
   ( do
       _ <- symbol "?"
       t2 <- pTerm
@@ -37,8 +38,53 @@ pTerm = do
     )
     <|> return t1
 
-pAddExpr :: Parser Term
-pAddExpr = makeExprParser pAtom operatorTable
+pIdent :: Parser Text
+pIdent = do
+  ident <- T.pack <$> ((:) <$> letterChar <*> many alphaNumChar)
+  if ident `elem` keywords
+    then fail $ "Keyword `" ++ T.unpack ident ++ "` cannot be used as an identifier."
+    else return ident
+  where
+    keywords = ["const", "number", "boolean", "true", "false"]
+
+pParam :: Parser Param
+pParam = do
+  ident <- pIdent
+  _ <- symbol ":"
+  Param ident <$> pType
+
+pFuncType :: Parser Type
+pFuncType = try $ do
+  ps <- parens (pParam `sepBy` symbol ",")
+  _ <- symbol "=>"
+  TyFunc ps <$> pType
+
+pType :: Parser Type
+pType =
+  choice
+    [ try pFuncType,
+      TyBoolean <$ symbol "boolean",
+      TyNumber <$ symbol "number",
+      parens pType
+    ]
+
+pFunc :: Parser Term
+pFunc = try $ do
+  ps <- parens (pParam `sepBy` symbol ",")
+  _ <- symbol "=>"
+  TmFunc ps <$> pTerm
+
+-- pFunc :: Parser Term
+-- pFunc = _
+
+-- pCall :: Parser Term
+-- pCall = _
+
+-- pSeq :: Parser Term
+-- pSeq = _
+
+pBinOp :: Parser Term
+pBinOp = makeExprParser pAtom operatorTable
 
 operatorTable :: [[Operator Parser Term]]
 operatorTable = [[InfixL (TmAdd <$ symbol "+")]]
@@ -46,10 +92,12 @@ operatorTable = [[InfixL (TmAdd <$ symbol "+")]]
 pAtom :: Parser Term
 pAtom =
   choice
-    [ parens pTerm,
+    [ pFunc,
       TmTrue <$ symbol "true",
       TmFalse <$ symbol "false",
-      TmNumber <$> lexeme L.decimal
+      TmNumber <$> lexeme L.decimal,
+      TmVar <$> pIdent,
+      parens pTerm
     ]
 
 parseTerm :: Text -> Either (ParseErrorBundle Text Void) Term
