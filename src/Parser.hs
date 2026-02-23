@@ -96,7 +96,7 @@ pArrowType :: Parser Type
 pArrowType = try $ do
   ps <- parens (pParam `sepBy` symbol ",")
   _ <- symbol "=>"
-  TyFunc ps <$> pType
+  TyArrow ps <$> pType
 
 pType :: Parser Type
 pType =

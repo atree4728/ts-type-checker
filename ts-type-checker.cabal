@@ -75,7 +75,9 @@ library
         base ^>=4.18.3.0,
         megaparsec,
         text,
-        parser-combinators
+        parser-combinators,
+        containers,
+        mtl
 
     -- Directories containing source files.
     hs-source-dirs:   src
