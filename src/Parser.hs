@@ -1,13 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser (parseTerm, Parser, ParserError) where
+module Parser (parse, Parser, ParserError) where
 
 import AST (Param (..), Term (..), Type (..))
 import Control.Monad.Combinators.Expr
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import Text.Megaparsec
+import Text.Megaparsec hiding (parse)
+import Text.Megaparsec qualified as MP
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -27,17 +28,6 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
-pTerm :: Parser Term
-pTerm = do
-  t1 <- pBinOp
-  ( do
-      _ <- symbol "?"
-      t2 <- pTerm
-      _ <- symbol ":"
-      TmIf t1 t2 <$> pTerm
-    )
-    <|> return t1
-
 pIdent :: Parser Text
 pIdent = do
   ident <- T.pack <$> ((:) <$> letterChar <*> many alphaNumChar)
@@ -47,14 +37,37 @@ pIdent = do
   where
     keywords = ["const", "number", "boolean", "true", "false"]
 
+{-
+ - Term    ::= AddExpr (`?` Term `:` Term)?
+ - AddExpr ::= AppExpr (`+` AppExpr)*
+ - AppExpr ::= Primary `(` (Term `,`)* `)`
+ - Primary ::= `,` (Param `,`)* `)` `=>` Term
+             | `true`
+             | `false`
+             | [0-9]+
+             | Ident
+             | `(` Term `)`
+-}
+
+pTerm :: Parser Term
+pTerm = do
+  t1 <- pAddExpr
+  ( do
+      _ <- symbol "?"
+      t2 <- pTerm
+      _ <- symbol ":"
+      TmIf t1 t2 <$> pTerm
+    )
+    <|> return t1
+
 pParam :: Parser Param
 pParam = do
   ident <- pIdent
   _ <- symbol ":"
   Param ident <$> pType
 
-pFuncType :: Parser Type
-pFuncType = try $ do
+pArrowType :: Parser Type
+pArrowType = try $ do
   ps <- parens (pParam `sepBy` symbol ",")
   _ <- symbol "=>"
   TyFunc ps <$> pType
@@ -62,37 +75,35 @@ pFuncType = try $ do
 pType :: Parser Type
 pType =
   choice
-    [ try pFuncType,
+    [ try pArrowType,
       TyBoolean <$ symbol "boolean",
       TyNumber <$ symbol "number",
       parens pType
     ]
 
-pFunc :: Parser Term
-pFunc = try $ do
+pArrow :: Parser Term
+pArrow = try $ do
   ps <- parens (pParam `sepBy` symbol ",")
   _ <- symbol "=>"
-  TmFunc ps <$> pTerm
+  TmArrow ps <$> pTerm
 
--- pFunc :: Parser Term
--- pFunc = _
+pAppExpr :: Parser Term
+pAppExpr = do
+  func <- pPrimary
+  argss <- many $ parens (pTerm `sepBy` symbol ",")
+  return $ foldl TmApp func argss
 
--- pCall :: Parser Term
--- pCall = _
+pAddExpr :: Parser Term
+pAddExpr =
+  makeExprParser pAppExpr operatorTable
+  where
+    operatorTable :: [[Operator Parser Term]]
+    operatorTable = [[InfixL (TmAdd <$ symbol "+")]]
 
--- pSeq :: Parser Term
--- pSeq = _
-
-pBinOp :: Parser Term
-pBinOp = makeExprParser pAtom operatorTable
-
-operatorTable :: [[Operator Parser Term]]
-operatorTable = [[InfixL (TmAdd <$ symbol "+")]]
-
-pAtom :: Parser Term
-pAtom =
+pPrimary :: Parser Term
+pPrimary =
   choice
-    [ pFunc,
+    [ pArrow,
       TmTrue <$ symbol "true",
       TmFalse <$ symbol "false",
       TmNumber <$> lexeme L.decimal,
@@ -100,5 +111,5 @@ pAtom =
       parens pTerm
     ]
 
-parseTerm :: Text -> Either (ParseErrorBundle Text Void) Term
-parseTerm = parse (sc *> pTerm <* eof) ""
+parse :: Text -> Either (ParseErrorBundle Text Void) Term
+parse = MP.parse (sc *> pTerm <* eof) ""

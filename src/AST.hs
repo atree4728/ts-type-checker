@@ -12,8 +12,9 @@ data Term
   | TmNumber {n :: Int}
   | TmAdd {left :: Term, right :: Term}
   | TmVar {name :: Text}
-  | TmFunc {params :: [Param], body :: Term}
-  --   | TmSeq {body :: Term, rest :: Term}
+  | TmArrow {params :: [Param], body :: Term}
+  | TmApp {func :: Term, args :: [Term]}
+  --   | TmBlock {body :: Term, rest :: Term}
   --   | TmConst {name :: Text, init :: Term, rest :: Term}
   deriving (Show, Eq)
 

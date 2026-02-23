@@ -2,7 +2,7 @@
 
 module TypeChecker where
 
-import AST
+import AST (Term (..), Type (..))
 import Control.Monad (when)
 
 data TypeError

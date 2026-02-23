@@ -3,7 +3,7 @@
 module Main (main) where
 
 import AST
-import Parser (parseTerm)
+import Parser (parse)
 import Test.Tasty
 import Test.Tasty.HUnit
 import TypeChecker
@@ -21,39 +21,45 @@ parserTests =
   testGroup
     "Parser"
     [ testCase "true" $
-        parseTerm "true" @?= Right TmTrue,
+        parse "true" @?= Right TmTrue,
       testCase "false" $
-        parseTerm "false" @?= Right TmFalse,
+        parse "false" @?= Right TmFalse,
       testCase "number" $
-        parseTerm "42" @?= Right (TmNumber 42),
+        parse "42" @?= Right (TmNumber 42),
       testCase "addition" $
-        parseTerm "1 + 2" @?= Right (TmAdd (TmNumber 1) (TmNumber 2)),
+        parse "1 + 2" @?= Right (TmAdd (TmNumber 1) (TmNumber 2)),
       testCase "addition is left-associative" $
-        parseTerm "1 + 2 + 3" @?= Right (TmAdd (TmAdd (TmNumber 1) (TmNumber 2)) (TmNumber 3)),
+        parse "1 + 2 + 3" @?= Right (TmAdd (TmAdd (TmNumber 1) (TmNumber 2)) (TmNumber 3)),
       testCase "ternary" $
-        parseTerm "true ? 1 : 2" @?= Right (TmIf TmTrue (TmNumber 1) (TmNumber 2)),
+        parse "true ? 1 : 2" @?= Right (TmIf TmTrue (TmNumber 1) (TmNumber 2)),
       testCase "nested ternary" $
-        parseTerm "true ? false ? 1 : 2 : 3"
+        parse "true ? false ? 1 : 2 : 3"
           @?= Right (TmIf TmTrue (TmIf TmFalse (TmNumber 1) (TmNumber 2)) (TmNumber 3)),
       testCase "parens" $
-        parseTerm "(true)" @?= Right TmTrue,
+        parse "(true)" @?= Right TmTrue,
       testCase "parens in addition" $
-        parseTerm "1 + (2 + 3)" @?= Right (TmAdd (TmNumber 1) (TmAdd (TmNumber 2) (TmNumber 3))),
+        parse "1 + (2 + 3)" @?= Right (TmAdd (TmNumber 1) (TmAdd (TmNumber 2) (TmNumber 3))),
       testCase "leading/trailing whitespace" $
-        parseTerm "  42 \n + 1 " @?= Right (TmAdd (TmNumber 42) (TmNumber 1)),
+        parse "  42 \n + 1 " @?= Right (TmAdd (TmNumber 42) (TmNumber 1)),
       testCase "parse error" $
-        case parseTerm "???" of
+        case parse "???" of
           Left _ -> pure ()
           Right t -> assertFailure $ "expected error but got: " ++ show t,
       testCase "variable" $
-        parseTerm "x" @?= Right (TmVar "x"),
+        parse "x" @?= Right (TmVar "x"),
       testCase "keyword" $
-        case parseTerm "number" of
+        case parse "number" of
           Left _ -> pure ()
           Right t -> assertFailure $ "expected error but got: " ++ show t,
       testCase "lambda" $
-        parseTerm "(n: number, b: boolean) => 1"
-          @?= Right (TmFunc [Param "n" TyNumber, Param "b" TyBoolean] (TmNumber 1))
+        parse "(n: number, b: boolean) => 1"
+          @?= Right (TmArrow [Param "n" TyNumber, Param "b" TyBoolean] (TmNumber 1)),
+      testCase "call by lambda" $
+        parse "((n: number) => 1)(0)"
+          @?= Right (TmApp (TmArrow [Param "n" TyNumber] (TmNumber 1)) [TmNumber 0]),
+      testCase "call by unit" $
+        parse "f()"
+          @?= Right (TmApp {func = TmVar "f", args = []})
     ]
 
 -- TypeChecker
