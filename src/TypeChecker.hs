@@ -5,8 +5,9 @@ module TypeChecker where
 import AST (Param (..), Term (..), Type (..))
 import Control.Monad (when)
 import Control.Monad.Reader
+import Data.List (intercalate)
 import Data.Map qualified as M
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 data TypeError
   = Unexpected Type Type -- actual, expected
@@ -14,7 +15,31 @@ data TypeError
   | Unbounded Text
   | NotAFunction Type
   | UnexpectedApp [Type] [Type] -- actual, expected
-  deriving (Show, Eq)
+  deriving (Eq)
+
+showType :: Type -> String
+showType TyBoolean = "boolean"
+showType TyNumber = "number"
+showType TyArrow {..} = "(" <> intercalate ", " (map showParam params) <> ") => " <> showType tRet
+
+showParam :: Param -> String
+showParam Param {..} = unpack name <> ": " <> showType type_
+
+instance Show TypeError where
+  show (Unexpected actual expected) =
+    "expected `" <> showType expected <> "` but got `" <> showType actual <> "`"
+  show (Mismatched tyL tyR) =
+    "type mismatch: `" <> showType tyL <> "` and `" <> showType tyR <> "`"
+  show (Unbounded name) =
+    "unbound variable: `" <> unpack name <> "`"
+  show (NotAFunction ty) =
+    "`" <> showType ty <> "` is not a function"
+  show (UnexpectedApp actual expected) =
+    "argument type mismatch: expected ("
+      <> intercalate ", " (map showType expected)
+      <> ") but got ("
+      <> intercalate ", " (map showType actual)
+      <> ")"
 
 type TypeEnv = M.Map Text Type
 
