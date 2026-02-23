@@ -19,3 +19,6 @@ instance Show LangError where
 
 langcheck :: Text -> Either LangError Type
 langcheck = first EParse . parse >=> first EType . typecheck
+
+-- >>> langcheck (Data.Text.pack "() => 0")
+-- Right (TyArrow {params = [], retType = TyNumber})

@@ -95,5 +95,29 @@ typecheckerTests =
           @?= Left (Unexpected TyBoolean TyNumber),
       testCase "add right must be Number" $
         typecheck (TmAdd (TmNumber 1) TmFalse)
-          @?= Left (Unexpected TyBoolean TyNumber)
+          @?= Left (Unexpected TyBoolean TyNumber),
+      testCase "unbounded variable" $ typecheck (TmVar "x") @?= Left (Unbounded "x"),
+      testCase "() => 0 :: () => Number" $
+        typecheck (TmArrow [] (TmNumber 0)) @?= Right (TyArrow [] TyNumber),
+      testCase "(n: number) => 0 :: (number) => Number" $
+        typecheck (TmArrow [Param "n" TyNumber] (TmNumber 0))
+          @?= Right (TyArrow [Param "n" TyNumber] TyNumber),
+      testCase "(b: boolean) => true :: (boolean) => Boolean" $
+        typecheck (TmArrow [Param "b" TyBoolean] TmTrue)
+          @?= Right (TyArrow [Param "b" TyBoolean] TyBoolean),
+      testCase "apply function" $
+        typecheck (TmApp (TmArrow [Param "n" TyNumber] (TmNumber 0)) [TmNumber 1])
+          @?= Right TyNumber,
+      testCase "apply function returning boolean" $
+        typecheck (TmApp (TmArrow [Param "n" TyNumber] TmTrue) [TmNumber 1])
+          @?= Right TyBoolean,
+      testCase "apply non-function" $
+        typecheck (TmApp (TmNumber 0) [])
+          @?= Left (NotAFunction TyNumber),
+      testCase "apply with wrong arg type" $
+        typecheck (TmApp (TmArrow [Param "n" TyNumber] (TmNumber 0)) [TmTrue])
+          @?= Left (UnexpectedApp [TyBoolean] [TyNumber]),
+      testCase "apply with wrong arity" $
+        typecheck (TmApp (TmArrow [] (TmNumber 0)) [TmNumber 1])
+          @?= Left (UnexpectedApp [TyNumber] [])
     ]

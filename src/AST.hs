@@ -28,5 +28,5 @@ instance Eq Param where
 data Type
   = TyBoolean
   | TyNumber
-  | TyArrow {params :: [Param], retType :: Type}
+  | TyArrow {params :: [Param], tRet :: Type}
   deriving (Show, Eq)
