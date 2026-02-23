@@ -59,7 +59,11 @@ parserTests =
           @?= Right (TmApp (TmArrow [Param "n" TyNumber] (TmNumber 1)) [TmNumber 0]),
       testCase "call by unit" $
         parse "f()"
-          @?= Right (TmApp {func = TmVar "f", args = []})
+          @?= Right (TmApp {func = TmVar "f", args = []}),
+      testCase "seq" $
+        parse "1;2;;" @?= Right (TmSeq {body = TmNumber {n = 1}, rest = TmNumber {n = 2}}),
+      testCase "const" $
+        parse "const f = () => 0;" @?= Right (TmConst "f" (TmArrow [] (TmNumber 0)) (TmVar "f"))
     ]
 
 -- TypeChecker

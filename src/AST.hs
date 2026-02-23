@@ -14,8 +14,8 @@ data Term
   | TmVar {name :: Text}
   | TmArrow {params :: [Param], body :: Term}
   | TmApp {func :: Term, args :: [Term]}
-  --   | TmBlock {body :: Term, rest :: Term}
-  --   | TmConst {name :: Text, init :: Term, rest :: Term}
+  | TmSeq {body :: Term, rest :: Term}
+  | TmConst {name :: Text, body :: Term, rest :: Term}
   deriving (Show, Eq)
 
 data Param

@@ -4,6 +4,7 @@ module Parser (parse, Parser, ParserError) where
 
 import AST (Param (..), Term (..), Type (..))
 import Control.Monad.Combinators.Expr
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
@@ -29,7 +30,7 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 pIdent :: Parser Text
-pIdent = do
+pIdent = lexeme $ do
   ident <- T.pack <$> ((:) <$> letterChar <*> many alphaNumChar)
   if ident `elem` keywords
     then fail $ "Keyword `" ++ T.unpack ident ++ "` cannot be used as an identifier."
@@ -38,6 +39,8 @@ pIdent = do
     keywords = ["const", "number", "boolean", "true", "false"]
 
 {-
+ - Block   ::= Term (`;` Block)?
+             | `const` Ident `=` Term `;` Block
  - Term    ::= AddExpr (`?` Term `:` Term)?
  - AddExpr ::= AppExpr (`+` AppExpr)*
  - AppExpr ::= Primary `(` (Term `,`)* `)`
@@ -48,6 +51,29 @@ pIdent = do
              | Ident
              | `(` Term `)`
 -}
+
+pBlock :: Parser Term
+pBlock =
+  pConst
+    <|> ( do
+            term <- pTerm
+            rest <- optional (symbol ";" *> skipMany (symbol ";") *> optional pBlock)
+            return $ case rest of
+              Nothing -> term
+              Just Nothing -> term
+              Just (Just r) -> TmSeq term r
+        )
+
+pConst :: Parser Term
+pConst = do
+  _ <- symbol "const"
+  name <- pIdent
+  _ <- symbol "="
+  body <- pTerm
+  _ <- symbol ";"
+  _ <- skipMany (symbol ";")
+  rest <- optional pBlock
+  return $ TmConst name body (fromMaybe (TmVar name) rest)
 
 pTerm :: Parser Term
 pTerm = do
@@ -112,4 +138,4 @@ pPrimary =
     ]
 
 parse :: Text -> Either (ParseErrorBundle Text Void) Term
-parse = MP.parse (sc *> pTerm <* eof) ""
+parse = MP.parse (sc *> pBlock <* eof) ""
