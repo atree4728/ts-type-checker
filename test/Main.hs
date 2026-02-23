@@ -119,5 +119,29 @@ typecheckerTests =
           @?= Left (UnexpectedApp [TyBoolean] [TyNumber]),
       testCase "apply with wrong arity" $
         typecheck (TmApp (TmArrow [] (TmNumber 0)) [TmNumber 1])
-          @?= Left (UnexpectedApp [TyNumber] [])
+          @?= Left (UnexpectedApp [TyNumber] []),
+      testCase "apply multi-arg function" $
+        typecheck (TmApp (TmArrow [Param "n" TyNumber, Param "b" TyBoolean] (TmNumber 0)) [TmNumber 1, TmTrue])
+          @?= Right TyNumber,
+      testCase "apply multi-arg with wrong arg types" $
+        typecheck (TmApp (TmArrow [Param "n" TyNumber, Param "b" TyBoolean] (TmNumber 0)) [TmTrue, TmNumber 1])
+          @?= Left (UnexpectedApp [TyBoolean, TyNumber] [TyNumber, TyBoolean]),
+      testCase "seq :: type of rest" $
+        typecheck (TmSeq TmTrue (TmNumber 1))
+          @?= Right TyNumber,
+      testCase "seq: body type error propagates" $
+        typecheck (TmSeq (TmAdd TmTrue (TmNumber 1)) (TmNumber 0))
+          @?= Left (Unexpected TyBoolean TyNumber),
+      testCase "const binds variable" $
+        typecheck (TmConst "x" (TmNumber 0) (TmVar "x"))
+          @?= Right TyNumber,
+      testCase "const: bound variable used in app" $
+        typecheck (TmConst "f" (TmArrow [] TmTrue) (TmApp (TmVar "f") []))
+          @?= Right TyBoolean,
+      testCase "const: body type error propagates" $
+        typecheck (TmConst "x" (TmAdd TmTrue (TmNumber 1)) (TmVar "x"))
+          @?= Left (Unexpected TyBoolean TyNumber),
+      testCase "const: rest refers to bound type" $
+        typecheck (TmConst "n" (TmNumber 42) (TmAdd (TmVar "n") (TmNumber 1)))
+          @?= Right TyNumber
     ]

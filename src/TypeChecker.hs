@@ -85,8 +85,12 @@ tc TmApp {..} = do
         when (tPrms /= tArgs) $ err $ UnexpectedApp tArgs tPrms
         pure tRet
     _ -> err $ NotAFunction tFunc
-tc TmSeq {..} = do pure TyNumber
-tc TmConst {..} = do pure TyNumber
+tc TmSeq {..} = do
+  _ <- tc body
+  tc rest
+tc TmConst {..} = do
+  tBody <- tc body
+  local (M.insert name tBody) $ tc rest
 
 typecheck :: Term -> Either TypeError Type
 typecheck term = runReaderT (tc term) M.empty
