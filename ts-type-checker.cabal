@@ -101,7 +101,8 @@ executable ts-type-checker
     -- Other library packages from which modules are imported.
     build-depends:
         base ^>=4.18.3.0,
-        ts-type-checker
+        ts-type-checker,
+        text
 
     -- Directories containing source files.
     hs-source-dirs:   app

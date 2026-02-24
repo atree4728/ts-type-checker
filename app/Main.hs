@@ -1,5 +1,7 @@
 module Main where
 
+import Data.Text.IO qualified as TIO
+import Lang (langcheck)
+
 main :: IO ()
-main = do
-  putStrLn "Hello, Haskell!"
+main = TIO.getContents >>= (print . langcheck)
