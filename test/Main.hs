@@ -118,7 +118,7 @@ typecheckerTests =
         typecheck (TmArrow [Param "b" TyBoolean] TmTrue)
           @?= Right (TyArrow [Param "b" TyBoolean] TyBoolean),
       testCase "apply function" $
-        typecheck (TmApp (TmArrow [Param "n" TyNumber] (TmNumber 0)) [TmNumber 1])
+        typecheck (TmApp (TmArrow [Param "n" TyNumber] (TmVar "n")) [TmNumber 1])
           @?= Right TyNumber,
       testCase "apply function returning boolean" $
         typecheck (TmApp (TmArrow [Param "n" TyNumber] TmTrue) [TmNumber 1])

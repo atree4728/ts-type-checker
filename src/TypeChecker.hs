@@ -82,8 +82,12 @@ tc TmAdd {..} = do
   when (tRight /= TyNumber) $ err $ Unexpected tRight TyNumber
   pure TyNumber
 tc TmVar {..} = lookupVar name
-tc TmArrow {..} = do
-  TyArrow params <$> tc body
+tc TmArrow {..} =
+  do
+    TyArrow params
+    <$> local
+      (M.union (M.fromList ((\Param {..} -> (name, type_)) <$> params)))
+      (tc body)
 tc TmApp {..} = do
   tFunc <- tc func
   tArgs <- mapM tc args
