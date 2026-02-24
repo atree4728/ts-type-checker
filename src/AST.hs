@@ -3,6 +3,7 @@
 module AST where
 
 import Data.Function (on)
+import Data.Map qualified as M
 import Data.Text (Text)
 
 data Term
@@ -16,17 +17,13 @@ data Term
   | TmApp {func :: Term, args :: [Term]}
   | TmSeq {body :: Term, rest :: Term}
   | TmConst {name :: Text, body :: Term, rest :: Term}
-  | TmObjNew {props :: [PropTerm]}
+  | TmObjNew {props :: M.Map Text Term}
   | TmObjGet {obj :: Term, name :: Text}
   deriving (Show, Eq)
 
 data Param
   = Param {name :: Text, type_ :: Type}
   deriving (Show)
-
-data PropTerm
-  = PropTerm {name :: Text, term :: Term}
-  deriving (Show, Eq)
 
 instance Eq Param where
   (==) = (==) `on` type_
@@ -35,4 +32,5 @@ data Type
   = TyBoolean
   | TyNumber
   | TyArrow {params :: [Param], tRet :: Type}
+  | TyObject {props :: M.Map Text Type}
   deriving (Show, Eq)

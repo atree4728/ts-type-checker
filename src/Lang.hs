@@ -19,6 +19,3 @@ instance Show LangError where
 
 langcheck :: Text -> Either LangError Type
 langcheck = first EParse . parse >=> first EType . typecheck
-
--- >>> parse (Data.Text.pack "{}.foo()")
--- Right (TmApp {func = TmObjGet {obj = TmObjNew {props = []}, name = "foo"}, args = []})

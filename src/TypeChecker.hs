@@ -15,12 +15,17 @@ data TypeError
   | Unbounded Text
   | NotAFunction Type
   | UnexpectedApp [Type] [Type] -- actual, expected
+  | NotAnObject Type
+  | PropNotFound Text (M.Map Text Type)
   deriving (Eq)
 
 showType :: Type -> String
 showType TyBoolean = "boolean"
 showType TyNumber = "number"
 showType TyArrow {..} = "(" <> intercalate ", " (map showParam params) <> ") => " <> showType tRet
+showType TyObject {..} = "{" <> intercalate ", " (map showProp (M.toList props)) <> "}"
+  where
+    showProp (k, v) = unpack k <> ": " <> showType v
 
 showParam :: Param -> String
 showParam Param {..} = unpack name <> ": " <> showType type_
@@ -40,6 +45,10 @@ instance Show TypeError where
       <> ") but got ("
       <> intercalate ", " (map showType actual)
       <> ")"
+  show (NotAnObject ty) =
+    "`" <> showType ty <> "` is not an object"
+  show (PropNotFound k props) =
+    "property `" <> unpack k <> "` not found in " <> showType (TyObject props)
 
 type TypeEnv = M.Map Text Type
 
@@ -91,6 +100,13 @@ tc TmSeq {..} = do
 tc TmConst {..} = do
   tBody <- tc body
   local (M.insert name tBody) $ tc rest
+tc TmObjNew {..} = TyObject <$> mapM tc props
+tc TmObjGet {..} = do
+  tObj <- tc obj
+  case tObj of
+    TyObject {..} ->
+      maybe (err $ PropNotFound name props) pure (M.lookup name props)
+    _ -> err $ NotAnObject tObj
 
 typecheck :: Term -> Either TypeError Type
 typecheck term = runReaderT (tc term) M.empty

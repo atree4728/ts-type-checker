@@ -3,6 +3,7 @@
 module Main (main) where
 
 import AST
+import Data.Map qualified as M
 import Parser (parse)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -65,16 +66,16 @@ parserTests =
       testCase "const" $
         parse "const f = () => 0;" @?= Right (TmConst "f" (TmArrow [] (TmNumber 0)) (TmVar "f")),
       testCase "empty object" $
-        parse "{}" @?= Right (TmObjNew []),
+        parse "{}" @?= Right (TmObjNew M.empty),
       testCase "object with props" $
         parse "{foo: 1, bar: true}"
-          @?= Right (TmObjNew [PropTerm "foo" (TmNumber 1), PropTerm "bar" TmTrue]),
+          @?= Right (TmObjNew (M.fromList [("foo", TmNumber 1), ("bar", TmTrue)])),
       testCase "object get" $
-        parse "{}.foo" @?= Right (TmObjGet (TmObjNew []) "foo"),
+        parse "{}.foo" @?= Right (TmObjGet (TmObjNew M.empty) "foo"),
       testCase "object get chain" $
-        parse "{}.foo.bar" @?= Right (TmObjGet (TmObjGet (TmObjNew []) "foo") "bar"),
+        parse "{}.foo.bar" @?= Right (TmObjGet (TmObjGet (TmObjNew M.empty) "foo") "bar"),
       testCase "object get then call" $
-        parse "{}.foo()" @?= Right (TmApp (TmObjGet (TmObjNew []) "foo") [])
+        parse "{}.foo()" @?= Right (TmApp (TmObjGet (TmObjNew M.empty) "foo") [])
     ]
 
 -- TypeChecker
@@ -154,5 +155,19 @@ typecheckerTests =
           @?= Left (Unexpected TyBoolean TyNumber),
       testCase "const: rest refers to bound type" $
         typecheck (TmConst "n" (TmNumber 42) (TmAdd (TmVar "n") (TmNumber 1)))
-          @?= Right TyNumber
+          @?= Right TyNumber,
+      testCase "empty object :: {}" $
+        typecheck (TmObjNew M.empty) @?= Right (TyObject M.empty),
+      testCase "object with props :: {foo: number}" $
+        typecheck (TmObjNew (M.fromList [("foo", TmNumber 1)]))
+          @?= Right (TyObject (M.fromList [("foo", TyNumber)])),
+      testCase "object get :: number" $
+        typecheck (TmObjGet (TmObjNew (M.fromList [("foo", TmNumber 1)])) "foo")
+          @?= Right TyNumber,
+      testCase "object get missing prop" $
+        typecheck (TmObjGet (TmObjNew M.empty) "foo")
+          @?= Left (PropNotFound "foo" M.empty),
+      testCase "object get from non-object" $
+        typecheck (TmObjGet (TmNumber 1) "foo")
+          @?= Left (NotAnObject TyNumber)
     ]

@@ -2,8 +2,9 @@
 
 module Parser (parse, Parser, ParserError) where
 
-import AST (Param (..), PropTerm (PropTerm), Term (..), Type (..))
+import AST (Param (..), Term (..), Type (..))
 import Control.Monad.Combinators.Expr
+import Data.Map qualified as M
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -117,13 +118,13 @@ pArrow = try $ do
 pObj :: Parser Term
 pObj = try $ do
   propTerms <- curly (pPropTerm `sepBy` symbol ",")
-  pure $ TmObjNew propTerms
+  pure $ TmObjNew $ M.fromList propTerms
   where
     curly = between (symbol "{") (symbol "}")
     pPropTerm = try $ do
       name <- pIdent
       _ <- symbol ":"
-      PropTerm name <$> pTerm
+      (name,) <$> pTerm
 
 data Postfix = App [Term] | Get Text
 
