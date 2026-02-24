@@ -2,7 +2,7 @@
 
 module Parser (parse, Parser, ParserError) where
 
-import AST (Param (..), Term (..), Type (..))
+import AST (Param (..), PropTerm (PropTerm), Term (..), Type (..))
 import Control.Monad.Combinators.Expr
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -45,6 +45,7 @@ pIdent = lexeme $ do
  - AddExpr ::= AppExpr (`+` AppExpr)*
  - AppExpr ::= Primary `(` (Term `,`)* `)`
  - Primary ::= `,` (Param `,`)* `)` `=>` Term
+             | Object
              | `true`
              | `false`
              | [0-9]+
@@ -113,11 +114,30 @@ pArrow = try $ do
   _ <- symbol "=>"
   TmArrow ps <$> pTerm
 
+pObj :: Parser Term
+pObj = try $ do
+  propTerms <- curly (pPropTerm `sepBy` symbol ",")
+  pure $ TmObjNew propTerms
+  where
+    curly = between (symbol "{") (symbol "}")
+    pPropTerm = try $ do
+      name <- pIdent
+      _ <- symbol ":"
+      PropTerm name <$> pTerm
+
+data Postfix = App [Term] | Get Text
+
 pAppExpr :: Parser Term
 pAppExpr = do
   func <- pPrimary
-  argss <- many $ parens (pTerm `sepBy` symbol ",")
-  return $ foldl TmApp func argss
+  ops <-
+    many $
+      (App <$> parens (pTerm `sepBy` symbol ","))
+        <|> (Get <$> (symbol "." *> pIdent))
+  return $ foldl apply func ops
+  where
+    apply t (App args) = TmApp t args
+    apply t (Get name) = TmObjGet t name
 
 pAddExpr :: Parser Term
 pAddExpr =
@@ -130,6 +150,7 @@ pPrimary :: Parser Term
 pPrimary =
   choice
     [ pArrow,
+      pObj,
       TmTrue <$ symbol "true",
       TmFalse <$ symbol "false",
       TmNumber <$> lexeme L.decimal,

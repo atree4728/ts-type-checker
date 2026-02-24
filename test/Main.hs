@@ -63,7 +63,18 @@ parserTests =
       testCase "seq" $
         parse "1;2;;" @?= Right (TmSeq {body = TmNumber {n = 1}, rest = TmNumber {n = 2}}),
       testCase "const" $
-        parse "const f = () => 0;" @?= Right (TmConst "f" (TmArrow [] (TmNumber 0)) (TmVar "f"))
+        parse "const f = () => 0;" @?= Right (TmConst "f" (TmArrow [] (TmNumber 0)) (TmVar "f")),
+      testCase "empty object" $
+        parse "{}" @?= Right (TmObjNew []),
+      testCase "object with props" $
+        parse "{foo: 1, bar: true}"
+          @?= Right (TmObjNew [PropTerm "foo" (TmNumber 1), PropTerm "bar" TmTrue]),
+      testCase "object get" $
+        parse "{}.foo" @?= Right (TmObjGet (TmObjNew []) "foo"),
+      testCase "object get chain" $
+        parse "{}.foo.bar" @?= Right (TmObjGet (TmObjGet (TmObjNew []) "foo") "bar"),
+      testCase "object get then call" $
+        parse "{}.foo()" @?= Right (TmApp (TmObjGet (TmObjNew []) "foo") [])
     ]
 
 -- TypeChecker

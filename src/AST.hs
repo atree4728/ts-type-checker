@@ -16,11 +16,17 @@ data Term
   | TmApp {func :: Term, args :: [Term]}
   | TmSeq {body :: Term, rest :: Term}
   | TmConst {name :: Text, body :: Term, rest :: Term}
+  | TmObjNew {props :: [PropTerm]}
+  | TmObjGet {obj :: Term, name :: Text}
   deriving (Show, Eq)
 
 data Param
   = Param {name :: Text, type_ :: Type}
   deriving (Show)
+
+data PropTerm
+  = PropTerm {name :: Text, term :: Term}
+  deriving (Show, Eq)
 
 instance Eq Param where
   (==) = (==) `on` type_
