@@ -19,6 +19,7 @@ data Term
   | TmConst {name :: Text, body :: Term, rest :: Term}
   | TmObjNew {props :: M.Map Text Term}
   | TmObjGet {obj :: Term, name :: Text}
+  | TmFunc {name :: Text, params :: [Param], tRet :: Type, body :: Term, rest :: Term}
   deriving (Show, Eq)
 
 data Param

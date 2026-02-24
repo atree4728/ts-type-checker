@@ -29,6 +29,9 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+curly :: Parser a -> Parser a
+curly = between (symbol "{") (symbol "}")
+
 pIdent :: Parser Text
 pIdent = lexeme $ do
   ident <- T.pack <$> ((:) <$> letterChar <*> many alphaNumChar)
@@ -36,7 +39,7 @@ pIdent = lexeme $ do
     then fail $ "Keyword `" <> T.unpack ident <> "` cannot be used as an identifier."
     else pure ident
   where
-    keywords = ["const", "number", "boolean", "true", "false"]
+    keywords = ["const", "number", "boolean", "true", "false", "function"]
 
 {-
  - Block   ::= Term (`;` Block)?
@@ -56,10 +59,20 @@ pIdent = lexeme $ do
 pBlock :: Parser Term
 pBlock =
   pConst
+    <|> pFunc
     <|> do
       term <- pTerm
       rest <- optional (symbol ";" *> skipMany (symbol ";") *> optional pBlock)
       pure $ maybe term (TmSeq term) (join rest)
+
+pFunc :: Parser Term
+pFunc = do
+  name <- symbol "function" *> pIdent
+  params <- parens (pParam `sepBy` symbol ",")
+  tRet <- symbol ":" *> pType
+  body <- curly pBlock
+  rest <- skipMany (symbol ";") *> optional pBlock
+  pure $ TmFunc name params tRet body (fromMaybe (TmVar name) rest)
 
 pConst :: Parser Term
 pConst = do
@@ -109,7 +122,6 @@ pArrow =
 pObj :: Parser Term
 pObj = try $ TmObjNew . M.fromList <$> curly (pPropTerm `sepBy` symbol ",")
   where
-    curly = between (symbol "{") (symbol "}")
     pPropTerm = try $ (,) <$> pIdent <* symbol ":" <*> pTerm
 
 data Postfix = App [Term] | Get Text

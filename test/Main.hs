@@ -75,7 +75,16 @@ parserTests =
       testCase "object get chain" $
         parse "{}.foo.bar" @?= Right (TmObjGet (TmObjGet (TmObjNew M.empty) "foo") "bar"),
       testCase "object get then call" $
-        parse "{}.foo()" @?= Right (TmApp (TmObjGet (TmObjNew M.empty) "foo") [])
+        parse "{}.foo()" @?= Right (TmApp (TmObjGet (TmObjNew M.empty) "foo") []),
+      testCase "function declaration" $
+        parse "function f(n: number): number { n }"
+          @?= Right (TmFunc "f" [Param "n" TyNumber] TyNumber (TmVar "n") (TmVar "f")),
+      testCase "function declaration with const body" $
+        parse "function f(n: number): number { const x = n; x }"
+          @?= Right (TmFunc "f" [Param "n" TyNumber] TyNumber (TmConst "x" (TmVar "n") (TmVar "x")) (TmVar "f")),
+      testCase "function declaration followed by call" $
+        parse "function f(): boolean { true }; f()"
+          @?= Right (TmFunc "f" [] TyBoolean TmTrue (TmApp (TmVar "f") []))
     ]
 
 -- TypeChecker
@@ -169,5 +178,17 @@ typecheckerTests =
           @?= Left (PropNotFound "foo" M.empty),
       testCase "object get from non-object" $
         typecheck (TmObjGet (TmNumber 1) "foo")
-          @?= Left (NotAnObject TyNumber)
+          @?= Left (NotAnObject TyNumber),
+      testCase "function declaration :: arrow type" $
+        typecheck (TmFunc "f" [Param "n" TyNumber] TyNumber (TmVar "n") (TmVar "f"))
+          @?= Right (TyArrow [Param "n" TyNumber] TyNumber),
+      testCase "function declaration: return type mismatch" $
+        typecheck (TmFunc "f" [] TyNumber TmTrue (TmVar "f"))
+          @?= Left (Unexpected TyBoolean TyNumber),
+      testCase "function declaration: param in scope" $
+        typecheck (TmFunc "f" [Param "n" TyNumber] TyNumber (TmAdd (TmVar "n") (TmNumber 1)) (TmVar "f"))
+          @?= Right (TyArrow [Param "n" TyNumber] TyNumber),
+      testCase "function declaration: recursive call" $
+        typecheck (TmFunc "f" [Param "n" TyNumber] TyNumber (TmAdd (TmVar "n") (TmApp (TmVar "f") [TmVar "n"])) (TmVar "f"))
+          @?= Right (TyArrow [Param "n" TyNumber] TyNumber)
     ]

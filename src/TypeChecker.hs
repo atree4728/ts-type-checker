@@ -91,6 +91,13 @@ tc TmObjGet {..} = do
     TyObject {..} ->
       maybe (throwError $ PropNotFound name props) pure (M.lookup name props)
     _ -> throwError $ NotAnObject tObj
+tc TmFunc {..} = do
+  let tFunc = TyArrow params tRet
+  let withSelf = M.union $ M.singleton name tFunc
+  let withParams = M.union $ M.fromList $ map ((.name) &&& (.type_)) params
+  tActual <- local (withSelf . withParams) $ tc body
+  unless (tActual == tRet) $ throwError $ Unexpected tActual tRet
+  local withSelf $ tc rest
 
 typecheck :: Term -> Either TypeError Type
 typecheck term = runReaderT (tc term) M.empty
