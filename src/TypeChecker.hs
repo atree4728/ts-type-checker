@@ -1,9 +1,9 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module TypeChecker where
 
 import AST (Param (..), Term (..), Type (..))
-import Control.Monad (when)
+import Control.Arrow ((&&&))
+import Control.Monad (unless)
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Reader
 import Data.List (intercalate)
 import Data.Map qualified as M
@@ -19,50 +19,34 @@ data TypeError
   | PropNotFound Text (M.Map Text Type)
   deriving (Eq)
 
-showType :: Type -> String
-showType TyBoolean = "boolean"
-showType TyNumber = "number"
-showType TyArrow {..} = "(" <> intercalate ", " (map showParam params) <> ") => " <> showType tRet
-showType TyObject {..} = "{" <> intercalate ", " (map showProp (M.toList props)) <> "}"
-  where
-    showProp (k, v) = unpack k <> ": " <> showType v
-
-showParam :: Param -> String
-showParam Param {..} = unpack name <> ": " <> showType type_
-
 instance Show TypeError where
   show (Unexpected actual expected) =
-    "expected `" <> showType expected <> "` but got `" <> showType actual <> "`"
+    "expected `" <> show expected <> "` but got `" <> show actual <> "`"
   show (Mismatched tyL tyR) =
-    "type mismatch: `" <> showType tyL <> "` and `" <> showType tyR <> "`"
+    "type mismatch: `" <> show tyL <> "` and `" <> show tyR <> "`"
   show (Unbounded name) =
     "unbound variable: `" <> unpack name <> "`"
   show (NotAFunction ty) =
-    "`" <> showType ty <> "` is not a function"
+    "`" <> show ty <> "` is not a function"
   show (UnexpectedApp actual expected) =
     "argument type mismatch: expected ("
-      <> intercalate ", " (map showType expected)
+      <> intercalate ", " (map show expected)
       <> ") but got ("
-      <> intercalate ", " (map showType actual)
+      <> intercalate ", " (map show actual)
       <> ")"
   show (NotAnObject ty) =
-    "`" <> showType ty <> "` is not an object"
+    "`" <> show ty <> "` is not an object"
   show (PropNotFound k props) =
-    "property `" <> unpack k <> "` not found in " <> showType (TyObject props)
+    "property `" <> unpack k <> "` not found in " <> show (TyObject props)
 
 type TypeEnv = M.Map Text Type
 
 type TypingM = ReaderT TypeEnv (Either TypeError)
 
-err :: TypeError -> TypingM a
-err = lift . Left
-
 lookupVar :: Text -> TypingM Type
-lookupVar name = do
-  env <- ask
-  case M.lookup name env of
-    Nothing -> err $ Unbounded name
-    Just ty -> pure ty
+lookupVar name =
+  asks (M.lookup name)
+    >>= maybe (throwError $ Unbounded name) pure
 
 tc :: Term -> TypingM Type
 tc TmTrue = pure TyBoolean
@@ -72,45 +56,41 @@ tc TmIf {..} = do
   tCond <- tc cond
   tThn <- tc thn
   tEls <- tc els
-  when (tThn /= tEls) $ err $ Mismatched tThn tEls
-  when (tCond /= TyBoolean) $ err $ Unexpected tCond TyBoolean
+  unless (tThn == tEls) $ throwError $ Mismatched tThn tEls
+  unless (tCond == TyBoolean) $ throwError $ Unexpected tCond TyBoolean
   pure tThn
 tc TmAdd {..} = do
   tLeft <- tc left
   tRight <- tc right
-  when (tLeft /= TyNumber) $ err $ Unexpected tLeft TyNumber
-  when (tRight /= TyNumber) $ err $ Unexpected tRight TyNumber
+  unless (tLeft == TyNumber) $ throwError $ Unexpected tLeft TyNumber
+  unless (tRight == TyNumber) $ throwError $ Unexpected tRight TyNumber
   pure TyNumber
 tc TmVar {..} = lookupVar name
 tc TmArrow {..} =
-  do
-    TyArrow params
+  TyArrow params
     <$> local
-      (M.union (M.fromList ((\Param {..} -> (name, type_)) <$> params)))
+      (M.union $ M.fromList $ map ((.name) &&& (.type_)) params)
       (tc body)
 tc TmApp {..} = do
   tFunc <- tc func
-  tArgs <- mapM tc args
+  tArgs <- traverse tc args
   case tFunc of
-    TyArrow {..} ->
-      do
-        let tPrms = type_ <$> params
-        when (tPrms /= tArgs) $ err $ UnexpectedApp tArgs tPrms
-        pure tRet
-    _ -> err $ NotAFunction tFunc
-tc TmSeq {..} = do
-  _ <- tc body
-  tc rest
+    TyArrow {..} -> do
+      let tPrms = map (.type_) params
+      unless (tPrms == tArgs) $ throwError $ UnexpectedApp tArgs tPrms
+      pure tRet
+    _ -> throwError $ NotAFunction tFunc
+tc TmSeq {..} = tc body *> tc rest
 tc TmConst {..} = do
   tBody <- tc body
   local (M.insert name tBody) $ tc rest
-tc TmObjNew {..} = TyObject <$> mapM tc props
+tc TmObjNew {..} = TyObject <$> traverse tc props
 tc TmObjGet {..} = do
   tObj <- tc obj
   case tObj of
     TyObject {..} ->
-      maybe (err $ PropNotFound name props) pure (M.lookup name props)
-    _ -> err $ NotAnObject tObj
+      maybe (throwError $ PropNotFound name props) pure (M.lookup name props)
+    _ -> throwError $ NotAnObject tObj
 
 typecheck :: Term -> Either TypeError Type
 typecheck term = runReaderT (tc term) M.empty

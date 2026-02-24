@@ -62,7 +62,7 @@ parserTests =
         parse "f()"
           @?= Right (TmApp {func = TmVar "f", args = []}),
       testCase "seq" $
-        parse "1;2;;" @?= Right (TmSeq {body = TmNumber {n = 1}, rest = TmNumber {n = 2}}),
+        parse "1;2;;" @?= Right (TmSeq {body = TmNumber 1, rest = TmNumber 2}),
       testCase "const" $
         parse "const f = () => 0;" @?= Right (TmConst "f" (TmArrow [] (TmNumber 0)) (TmVar "f")),
       testCase "empty object" $

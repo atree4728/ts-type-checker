@@ -1,8 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Parser (parse, Parser, ParserError) where
 
 import AST (Param (..), Term (..), Type (..))
+import Control.Monad (join)
 import Control.Monad.Combinators.Expr
 import Data.Map qualified as M
 import Data.Maybe (fromMaybe)
@@ -34,8 +33,8 @@ pIdent :: Parser Text
 pIdent = lexeme $ do
   ident <- T.pack <$> ((:) <$> letterChar <*> many alphaNumChar)
   if ident `elem` keywords
-    then fail $ "Keyword `" ++ T.unpack ident ++ "` cannot be used as an identifier."
-    else return ident
+    then fail $ "Keyword `" <> T.unpack ident <> "` cannot be used as an identifier."
+    else pure ident
   where
     keywords = ["const", "number", "boolean", "true", "false"]
 
@@ -57,48 +56,38 @@ pIdent = lexeme $ do
 pBlock :: Parser Term
 pBlock =
   pConst
-    <|> ( do
-            term <- pTerm
-            rest <- optional (symbol ";" *> skipMany (symbol ";") *> optional pBlock)
-            return $ case rest of
-              Nothing -> term
-              Just Nothing -> term
-              Just (Just r) -> TmSeq term r
-        )
+    <|> do
+      term <- pTerm
+      rest <- optional (symbol ";" *> skipMany (symbol ";") *> optional pBlock)
+      pure $ maybe term (TmSeq term) (join rest)
 
 pConst :: Parser Term
 pConst = do
-  _ <- symbol "const"
-  name <- pIdent
-  _ <- symbol "="
-  body <- pTerm
-  _ <- symbol ";"
-  _ <- skipMany (symbol ";")
-  rest <- optional pBlock
-  return $ TmConst name body (fromMaybe (TmVar name) rest)
+  name <- symbol "const" *> pIdent
+  body <- symbol "=" *> pTerm
+  rest <- symbol ";" *> skipMany (symbol ";") *> optional pBlock
+  pure $ TmConst name body (fromMaybe (TmVar name) rest)
 
 pTerm :: Parser Term
 pTerm = do
   t1 <- pAddExpr
-  ( do
-      _ <- symbol "?"
-      t2 <- pTerm
-      _ <- symbol ":"
-      TmIf t1 t2 <$> pTerm
-    )
-    <|> return t1
+  (TmIf t1 <$> (symbol "?" *> pTerm) <*> (symbol ":" *> pTerm))
+    <|> pure t1
 
 pParam :: Parser Param
-pParam = do
-  ident <- pIdent
-  _ <- symbol ":"
-  Param ident <$> pType
+pParam =
+  Param
+    <$> pIdent
+    <* symbol ":"
+    <*> pType
 
 pArrowType :: Parser Type
-pArrowType = try $ do
-  ps <- parens (pParam `sepBy` symbol ",")
-  _ <- symbol "=>"
-  TyArrow ps <$> pType
+pArrowType =
+  try $
+    TyArrow
+      <$> parens (pParam `sepBy` symbol ",")
+      <* symbol "=>"
+      <*> pType
 
 pType :: Parser Type
 pType =
@@ -110,32 +99,29 @@ pType =
     ]
 
 pArrow :: Parser Term
-pArrow = try $ do
-  ps <- parens (pParam `sepBy` symbol ",")
-  _ <- symbol "=>"
-  TmArrow ps <$> pTerm
+pArrow =
+  try $
+    TmArrow
+      <$> parens (pParam `sepBy` symbol ",")
+      <* symbol "=>"
+      <*> pTerm
 
 pObj :: Parser Term
-pObj = try $ do
-  propTerms <- curly (pPropTerm `sepBy` symbol ",")
-  pure $ TmObjNew $ M.fromList propTerms
+pObj = try $ TmObjNew . M.fromList <$> curly (pPropTerm `sepBy` symbol ",")
   where
     curly = between (symbol "{") (symbol "}")
-    pPropTerm = try $ do
-      name <- pIdent
-      _ <- symbol ":"
-      (name,) <$> pTerm
+    pPropTerm = try $ (,) <$> pIdent <* symbol ":" <*> pTerm
 
 data Postfix = App [Term] | Get Text
 
 pAppExpr :: Parser Term
-pAppExpr = do
-  func <- pPrimary
-  ops <-
-    many $
-      (App <$> parens (pTerm `sepBy` symbol ","))
-        <|> (Get <$> (symbol "." *> pIdent))
-  return $ foldl apply func ops
+pAppExpr =
+  foldl apply
+    <$> pPrimary
+    <*> many
+      ( (App <$> parens (pTerm `sepBy` symbol ","))
+          <|> (Get <$> (symbol "." *> pIdent))
+      )
   where
     apply t (App args) = TmApp t args
     apply t (Get name) = TmObjGet t name
